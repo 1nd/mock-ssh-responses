@@ -78,6 +78,10 @@ if (argv.generate) {
           '    IdentityFile ' + resolvedGeneratePath
         ].join("\n")
   
+  if (!fs.existsSync(path)) {
+    // Do something
+  }
+
   // Remove old private key
   execFile('rm', ['-f', resolvedGeneratePath], (error, stdout, stderr) => { if (error) { throw error; } });
 
@@ -91,32 +95,59 @@ if (argv.generate) {
       
       // Automate flag is present
       if (argv.auto) {
-        // Replace old key with new key if it exists. Otherwise append new key.
-        const options = {
-          files: authorizedKeysFile,
-          replace: /command.*answers.yml@mock-ssh-responses/g,
-          with: authorizedKey
-        };
-        replace(options, (error, changedFile) => {
-          if (error) { fatal('Error occurred while replacing key: ', error); }
+        if (fs.existsSync(authorizedKeysFile)) {
+          // Replace old key with new key if it exists. Otherwise append new key.
+          const options = {
+            files: authorizedKeysFile,
+            replace: /command.*mock-ssh-responses/g,
+            with: authorizedKey
+          };
+          replace(options, (error, changedFile) => {
+            if (error) { fatal('Error occurred while replacing key: ', error); }
 
-          // Append new key if old key did not exist and was not replaced
-          if (changedFile == '') {
-            fs.appendFile(authorizedKeysFile, authorizedKey, function (error) {
-              if (error) { fatal('Error occurred while appending key: ', error); }
-            });
-          }
-        });
-
-        // If host entry is not present apprent to config fle
-        fs.readFile(configFile, function (err, data) {
-          if (err) throw err;
-          if(data.indexOf(resolvedGeneratePath) < 0){
-            fs.appendFile(configFile, hostEntry, function (error) {
-              if (error) { fatal('Error occurred while appending host entry: ', error); }
-            });
-          }
-        });
+            // Append new key if old key did not exist and was not replaced
+            if (changedFile == '') {
+              // If authorized_keys file exists
+              
+              fs.appendFile(authorizedKeysFile, authorizedKey, function (error) {
+                if (error) { fatal('Error occurred while appending key to authorized_keys file: ', error); }
+              });
+            }
+          });
+        } else {
+          // Create authorized_keys file
+          fs.openSync(authorizedKeysFile, 'w', function (error) {
+            if (error) { fatal('Error occurred while creating authorized_keys file: ', error); }
+          });
+          // Change permissions
+          fs.chmodSync(authorizedKeysFile, '600');
+          // Append to file
+          fs.appendFile(authorizedKeysFile, authorizedKey, function (error) {
+            if (error) { fatal('Error occurred while appending key to authorized_keys file: ', error); }
+          });
+        }
+        if (fs.existsSync(configFile)) {
+          // If host entry is not present append to config fle
+          fs.readFile(configFile, function (err, data) {
+            if (err) throw err;
+            if(data.indexOf(resolvedGeneratePath) < 0){
+              fs.appendFile(configFile, hostEntry, function (error) {
+                if (error) { fatal('Error occurred while appending host entry to config file: ', error); }
+              });
+            }
+          });
+        } else {
+          // Create authorized_keys file
+          fs.openSync(configFile, 'w', function (error) {
+            if (error) { fatal('Error occurred while creating config file: ', error); }
+          });
+          // Change permissions
+          fs.chmodSync(configFile, '644');
+          // Append to file
+          fs.appendFile(configFile, hostEntry, function (error) {
+            if (error) { fatal('Error occurred while appending host entry to new config file: ', error); }
+          });
+        }
 
       // Automate flag is not present
       } else {
